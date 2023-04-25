@@ -29,6 +29,7 @@
     user: "{{ fyreuser }}"
     password: "{{ fyreapikey }}"
     validate_certs: False
+    return_content: True
   register: clusterStatus
   changed_when: false
   failed_when: false
@@ -43,6 +44,10 @@
   - name: Debug OS
     debug:
       msg: "os - {{ fyre_os }}; platform - {{ fyre_platform }}"
+
+  - name: Debug Request
+    debug:
+      msg: "request - {{ lookup('template', 'vm_request.json.j2') }}"
 
   - name: Create Fyre stack
     uri:
@@ -66,6 +71,7 @@
       msg: "{{ buildstatus.json }}"
 
   - name: get Fyre request status
+    no_log: "{{ noLog }}"
     uri:
       url: "{{ fyre_requeststatusurl }}{{ (buildstatus.json).request_id }}"
       method: "POST"
@@ -73,16 +79,18 @@
       password: "{{ fyreapikey }}"
       validate_certs: False
       return_content: yes
-      body_format: json
-    no_log: "{{ noLog }}"
-    retries: 999
-    delay: 5
+    retries: 5
+    delay: 60
     register: fyreStatus
-    until: fyreStatus.json.request[0].get('status') == 'error' or fyreStatus.json.request[0].get('status') == 'completed'
+    until: (fyreStatus.status == 200) and (fyreStatus.json.request[0].get('status') == 'error' or fyreStatus.json.request[0].get('status') == 'completed')
 
   - name: Debug msg 2
     debug:
       msg: "{{ fyreStatus.json }}"
+
+  - name: Debug msg 3
+    debug:
+      msg: "{{ fyreStatus.status }}"
 
   - name: Debug msg Template
     debug:
@@ -106,12 +114,11 @@
     password: "{{ fyreapikey }}"
     validate_certs: False
     return_content: yes
-    body_format: json
   changed_when: false
   register: clusterStatus
   until: (clusterStatus.status == 200) and clusterStatus.json is defined and (clusterStatus.json[clusterName][0].status  == "deployed" or clusterStatus.json[clusterName][0].status == "error")
-  retries: 600
-  delay: 20
+  retries: 10
+  delay: 30
 
 - name: check for error status after loop check
   fail:
